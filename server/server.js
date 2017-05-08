@@ -31,7 +31,7 @@ var bodyParser = require('body-parser');
  * if any. This is often the best approach, because the verify callback
  * can make the most accurate determination of why authentication failed.
  */
-var flash      = require('express-flash');
+var flash = require('express-flash');
 
 // attempt to build the providers/passport config
 var config = {};
@@ -70,6 +70,28 @@ app.middleware('session', session({
   saveUninitialized: true,
   resave: true,
 }));
+
+function customProfileToUser(provider, profile, options) {
+  console.log("Profile:", profile);
+  // Let's create a user for that
+  var email = profile.emails && profile.emails[0] &&
+    profile.emails[0].value;
+  var firstName = profile.name.givenName || '';
+  var lastName = profile.name.familyName || '';
+  var password = Date.now().toString();
+  var userObj = {
+    username: email,
+    password: password,
+    firstName: firstName,
+    lastName: lastName
+  };
+  if (email) {
+    userObj.email = email;
+  }
+  console.log("New User:", userObj);
+  return userObj;
+}
+
 passportConfigurator.init();
 
 // We need flash messages to see passport errors
@@ -83,39 +105,42 @@ passportConfigurator.setupModels({
 for (var s in config) {
   var c = config[s];
   c.session = c.session !== false;
+  c.profileToUser = customProfileToUser;
+  console.log("Override config:", c);
   passportConfigurator.configureProvider(s, c);
 }
 var ensureLoggedIn = require('connect-ensure-login').ensureLoggedIn;
 
-app.get('/', function(req, res, next) {
-  res.render('pages/index', {user:
+app.get('/', function (req, res, next) {
+  res.render('pages/index', {
+    user:
     req.user,
     url: req.url,
   });
 });
 
-app.get('/auth/account', ensureLoggedIn('/login'), function(req, res, next) {
+app.get('/auth/account', ensureLoggedIn('/login'), function (req, res, next) {
   res.render('pages/loginProfiles', {
     user: req.user,
     url: req.url,
   });
 });
 
-app.get('/local', function(req, res, next) {
+app.get('/local', function (req, res, next) {
   res.render('pages/local', {
     user: req.user,
     url: req.url,
   });
 });
 
-app.get('/signup', function(req, res, next) {
+app.get('/signup', function (req, res, next) {
   res.render('pages/signup', {
     user: req.user,
     url: req.url,
   });
 });
 
-app.post('/signup', function(req, res, next) {
+app.post('/signup', function (req, res, next) {
   var User = app.models.user;
 
   var newUser = {};
@@ -123,7 +148,7 @@ app.post('/signup', function(req, res, next) {
   newUser.username = req.body.username.trim();
   newUser.password = req.body.password;
 
-  User.create(newUser, function(err, user) {
+  User.create(newUser, function (err, user) {
     if (err) {
       req.flash('error', err.message);
       return res.redirect('back');
@@ -132,7 +157,7 @@ app.post('/signup', function(req, res, next) {
       // that can be used to establish a login session. This function is
       // primarily used when users sign up, during which req.login() can
       // be invoked to log in the newly registered user.
-      req.login(user, function(err) {
+      req.login(user, function (err) {
         if (err) {
           req.flash('error', err.message);
           return res.redirect('back');
@@ -143,21 +168,21 @@ app.post('/signup', function(req, res, next) {
   });
 });
 
-app.get('/login', function(req, res, next) {
+app.get('/login', function (req, res, next) {
   res.render('pages/login', {
     user: req.user,
     url: req.url,
   });
 });
 
-app.get('/auth/logout', function(req, res, next) {
+app.get('/auth/logout', function (req, res, next) {
   req.logout();
   res.redirect('/');
 });
 
-app.start = function() {
+app.start = function () {
   // start the web server
-  return app.listen(function() {
+  return app.listen(function () {
     app.emit('started');
     var baseUrl = app.get('url').replace(/\/$/, '');
     console.log('Web server listening at: %s', baseUrl);
